@@ -1,0 +1,141 @@
+version: 2
+
+models:
+  - name: fct_trips
+    description: >
+      Tabla de hechos del esquema estrella. Grano: un viaje válido de NYC Yellow
+      Taxi (una fila por trip_id). Incremental delete+insert por _source_period.
+    data_tests:
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "trip_duration_minutes > 0"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "total_amount > 0"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "dropoff_date_key >= pickup_date_key"
+    columns:
+      - name: trip_id
+        description: Primary key del hecho (hash de los atributos del viaje).
+        data_tests: [unique, not_null]
+      - name: pickup_date_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: dropoff_date_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: pickup_time_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_time')
+                field: time_key
+      - name: dropoff_time_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_time')
+                field: time_key
+      - name: pickup_location_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_location')
+                field: location_key
+      - name: dropoff_location_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_location')
+                field: location_key
+      - name: vendor_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_vendor')
+                field: vendor_key
+      - name: rate_code_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_rate_code')
+                field: rate_code_key
+      - name: payment_type_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_payment_type')
+                field: payment_type_key
+      - name: trip_distance
+        description: Distancia del viaje en millas.
+        data_tests: [not_null]
+      - name: trip_duration_minutes
+        description: Duración del viaje en minutos.
+        data_tests: [not_null]
+      - name: total_amount
+        description: Monto total cobrado al pasajero (USD, sin incluir propinas en efectivo).
+        data_tests: [not_null]
+      - name: _source_period
+        data_tests: [not_null]
+
+  - name: dim_date
+    description: "Dimensión calendario (día). Role-playing: fecha de pickup y dropoff."
+    columns:
+      - name: date_key
+        description: Primary key.
+        data_tests: [unique, not_null]
+
+  - name: dim_time
+    description: "Dimensión hora del día a nivel minuto (HHMM). Role-playing: hora de pickup y dropoff."
+    columns:
+      - name: time_key
+        description: Primary key.
+        data_tests: [unique, not_null]
+
+  - name: dim_location
+    description: "Zonas TLC. Role-playing: zona de origen y destino."
+    columns:
+      - name: location_key
+        description: Primary key.
+        data_tests: [unique, not_null]
+      - name: borough
+        data_tests: [not_null]
+      - name: zone
+        data_tests: [not_null]
+
+  - name: dim_vendor
+    description: Proveedor TPEP que reporta el viaje.
+    columns:
+      - name: vendor_key
+        description: Primary key.
+        data_tests: [unique, not_null]
+
+  - name: dim_rate_code
+    description: Tipo de tarifa aplicada al final del viaje.
+    columns:
+      - name: rate_code_key
+        description: Primary key.
+        data_tests: [unique, not_null]
+
+  - name: dim_payment_type
+    description: Forma de pago del pasajero.
+    columns:
+      - name: payment_type_key
+        description: Primary key.
+        data_tests: [unique, not_null]

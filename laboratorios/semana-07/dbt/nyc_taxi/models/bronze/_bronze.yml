@@ -1,0 +1,23 @@
+version: 2
+
+models:
+  - name: brz_yellow_tripdata
+    description: >
+      Viajes Yellow Taxi sin transformar. Conserva nombres y tipos de la fuente;
+      solo agrega _source_period derivado del nombre del archivo.
+    columns:
+      - name: _source_file
+        description: Ruta del archivo en el stage (p. ej. yellow/yellow_tripdata_2025-01.parquet).
+        data_tests: [not_null]
+      - name: _source_period
+        description: Período del archivo de origen (YYYY-MM).
+        data_tests: [not_null]
+      - name: _loaded_at
+        description: Timestamp de la carga a Snowflake.
+        data_tests: [not_null]
+
+  - name: brz_taxi_zones
+    description: Catálogo de zonas TLC tal cual la fuente.
+    columns:
+      - name: location_id
+        data_tests: [unique, not_null]

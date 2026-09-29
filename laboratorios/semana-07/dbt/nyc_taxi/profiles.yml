@@ -1,0 +1,15 @@
+nyc_taxi:
+  target: prod
+  outputs:
+    prod:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      # PEM de la llave privada (Kestra lo decodifica del base64 del .env)
+      private_key: "{{ env_var('SNOWFLAKE_PRIVATE_KEY') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', 'NYC_TAXI_ROLE') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'NYC_TAXI_WH') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'NYC_TAXI') }}"
+      schema: BRONZE
+      threads: 4
+      query_tag: dbt_nyc_taxi

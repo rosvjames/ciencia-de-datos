@@ -1,0 +1,46 @@
+version: 2
+
+seeds:
+  - name: taxi_zone_lookup
+    description: Catálogo oficial de zonas TLC (https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv).
+    config:
+      column_types:
+        location_id: integer
+        borough: varchar
+        zone: varchar
+        service_zone: varchar
+    columns:
+      - name: location_id
+        data_tests: [unique, not_null]
+
+  - name: vendors
+    description: Proveedores TPEP según el data dictionary TLC (2025). 99 = Unknown (agregado para códigos no catalogados).
+    config:
+      column_types: {vendor_id: integer, vendor_name: varchar}
+    columns:
+      - name: vendor_id
+        data_tests: [unique, not_null]
+
+  - name: rate_codes
+    description: Códigos de tarifa (RatecodeID) según el data dictionary TLC.
+    config:
+      column_types: {rate_code_id: integer, rate_code_name: varchar}
+    columns:
+      - name: rate_code_id
+        data_tests: [unique, not_null]
+
+  - name: payment_types
+    description: Tipos de pago según el data dictionary TLC (0 = Flex Fare, introducido en 2025).
+    config:
+      column_types: {payment_type_id: integer, payment_type_name: varchar}
+    columns:
+      - name: payment_type_id
+        data_tests: [unique, not_null]
+
+  - name: us_holidays
+    description: Feriados federales de EE. UU. 2025-2026 (para dim_date).
+    config:
+      column_types: {holiday_date: date, holiday_name: varchar}
+    columns:
+      - name: holiday_date
+        data_tests: [unique, not_null]

@@ -1,0 +1,92 @@
+name: nyc-taxi-elt
+
+services:
+
+  kestra-db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=kestra
+      - POSTGRES_PASSWORD=kestra
+      - POSTGRES_DB=kestra
+    volumes:
+      - kestra-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kestra -d kestra"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  kestra:
+    build: ./kestra
+    image: nyc-taxi-kestra:v1.3.37
+    user: "root"
+    command: ["server", "standalone"]
+    ports:
+      - "8080:8080"
+    environment:
+      # Variables disponibles en los flujos como {{ envs.snowflake_* }}
+      ENV_SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT}
+      ENV_SNOWFLAKE_USER: ${SNOWFLAKE_USER}
+      ENV_SNOWFLAKE_ROLE: ${SNOWFLAKE_ROLE}
+      ENV_SNOWFLAKE_WAREHOUSE: ${SNOWFLAKE_WAREHOUSE}
+      ENV_SNOWFLAKE_DATABASE: ${SNOWFLAKE_DATABASE}
+      ENV_SNOWFLAKE_PRIVATE_KEY: ${SNOWFLAKE_PRIVATE_KEY}
+
+      KESTRA_CONFIGURATION: |
+        datasources:
+          postgres:
+            url: jdbc:postgresql://kestra-db:5432/kestra
+            driver-class-name: org.postgresql.Driver
+            username: kestra
+            password: kestra
+
+        kestra:
+          server:
+            basic-auth:
+              username: ${KESTRA_USER:-admin@kestra.io}
+              password: ${KESTRA_PASSWORD:-Admin1234}
+          tutorial-flows:
+            enabled: false
+          repository:
+            type: postgres
+          queue:
+            type: postgres
+          storage:
+            type: local
+            local:
+              base-path: /app/storage
+          tasks:
+            tmp-dir:
+              path: /tmp/kestra-wd/tmp
+          url: http://localhost:8080
+    volumes:
+      - kestra-storage:/app/storage
+      - ./dbt/nyc_taxi:/dbt:ro
+    depends_on:
+      kestra-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # Carga/actualiza los flujos de ./kestra/flows en Kestra cada vez que se levanta el stack
+  flow-loader:
+    image: curlimages/curl:8.10.1
+    entrypoint: ["/bin/sh", "/load_flows.sh"]
+    environment:
+      KESTRA_USER: ${KESTRA_USER:-admin@kestra.io}
+      KESTRA_PASSWORD: ${KESTRA_PASSWORD:-Admin1234}
+    volumes:
+      - ./kestra/flows:/flows:ro
+      - ./kestra/load_flows.sh:/load_flows.sh:ro
+    depends_on:
+      kestra:
+        condition: service_healthy
+    restart: "no"
+
+volumes:
+  kestra-storage:
+  kestra-db-data:

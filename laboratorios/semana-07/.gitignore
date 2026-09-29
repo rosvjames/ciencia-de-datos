@@ -1,0 +1,11 @@
+.env
+*.p8
+*.pem
+keys/
+dbt/nyc_taxi/target/
+dbt/nyc_taxi/dbt_packages/
+dbt/nyc_taxi/logs/
+dbt/nyc_taxi/.user.yml
+.venv/
+__pycache__/
+.DS_Store

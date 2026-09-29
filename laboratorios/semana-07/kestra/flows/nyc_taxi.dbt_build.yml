@@ -1,0 +1,35 @@
+id: dbt_build
+namespace: nyc_taxi
+description: |
+  Ejecuta el proyecto dbt (montado en /dbt) contra Snowflake:
+  deps -> build (seeds + modelos Bronze/Silver/Gold + tests).
+
+inputs:
+  - id: full_refresh
+    type: BOOL
+    description: Reconstruir todos los modelos incrementales desde cero
+    defaults: false
+
+tasks:
+  - id: dbt
+    type: io.kestra.plugin.scripts.shell.Commands
+    taskRunner:
+      type: io.kestra.plugin.core.runner.Process
+    env:
+      SNOWFLAKE_ACCOUNT: "{{ envs.snowflake_account }}"
+      SNOWFLAKE_USER: "{{ envs.snowflake_user }}"
+      # PEM decodificado desde el base64 del .env (dbt-snowflake acepta PEM)
+      SNOWFLAKE_PRIVATE_KEY: "{{ envs.snowflake_private_key | base64decode }}"
+      SNOWFLAKE_ROLE: "{{ envs.snowflake_role }}"
+      SNOWFLAKE_WAREHOUSE: "{{ envs.snowflake_warehouse }}"
+      SNOWFLAKE_DATABASE: "{{ envs.snowflake_database }}"
+      DBT_PROFILES_DIR: "."
+    commands:
+      # Copia el proyecto (montado read-only) al working directory temporal de la tarea
+      - cp -r /dbt/. .
+      - rm -rf target dbt_packages logs
+      - dbt --version
+      - dbt deps
+      - "dbt build {{ inputs.full_refresh ? '--full-refresh' : '' }}"
+    outputFiles:
+      - target/run_results.json

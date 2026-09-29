@@ -1,0 +1,57 @@
+id: backfill
+namespace: nyc_taxi
+description: |
+  Carga a RAW todos los meses indicados (por defecto ene-2025 a ago-2026, 20 meses)
+  ejecutando el subflow ingest_month por período. Si TLC aún no publicó un mes,
+  esa ejecución falla con allowFailure y el backfill termina en WARNING; basta
+  con volver a correrlo cuando el archivo esté disponible.
+
+inputs:
+  - id: periods
+    type: ARRAY
+    itemType: STRING
+    description: Lista de períodos YYYY-MM a cargar
+    defaults:
+      - "2025-01"
+      - "2025-02"
+      - "2025-03"
+      - "2025-04"
+      - "2025-05"
+      - "2025-06"
+      - "2025-07"
+      - "2025-08"
+      - "2025-09"
+      - "2025-10"
+      - "2025-11"
+      - "2025-12"
+      - "2026-01"
+      - "2026-02"
+      - "2026-03"
+      - "2026-04"
+      - "2026-05"
+      - "2026-06"
+      - "2026-07"
+      - "2026-08"
+
+tasks:
+  - id: init_raw
+    type: io.kestra.plugin.core.flow.Subflow
+    namespace: nyc_taxi
+    flowId: init_raw
+    wait: true
+    transmitFailed: true
+
+  - id: each_month
+    type: io.kestra.plugin.core.flow.ForEach
+    values: "{{ inputs.periods }}"
+    concurrencyLimit: 4
+    tasks:
+      - id: ingest
+        type: io.kestra.plugin.core.flow.Subflow
+        namespace: nyc_taxi
+        flowId: ingest_month
+        inputs:
+          period: "{{ taskrun.value }}"
+        wait: true
+        transmitFailed: true
+        allowFailure: true

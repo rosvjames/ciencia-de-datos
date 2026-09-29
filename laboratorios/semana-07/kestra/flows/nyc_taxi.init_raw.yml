@@ -1,0 +1,62 @@
+id: init_raw
+namespace: nyc_taxi
+description: |
+  Crea (si no existen) los objetos de aterrizaje en Snowflake: esquema RAW,
+  file format Parquet, stage interno y la tabla RAW.YELLOW_TRIPDATA.
+  Idempotente: se ejecuta antes de cada ingesta.
+
+tasks:
+  - id: create_raw_objects
+    type: io.kestra.plugin.jdbc.snowflake.Queries
+    transaction: false
+    sql: |
+      CREATE SCHEMA IF NOT EXISTS RAW;
+
+      CREATE FILE FORMAT IF NOT EXISTS RAW.PARQUET_FF
+        TYPE = PARQUET
+        USE_LOGICAL_TYPE = TRUE;
+
+      CREATE STAGE IF NOT EXISTS RAW.TLC_STAGE
+        FILE_FORMAT = RAW.PARQUET_FF
+        COMMENT = 'Archivos Parquet originales de NYC TLC';
+
+      -- Columnas del diccionario TLC con tipos laxos (FLOAT/NUMBER) para tolerar
+      -- el drift de tipos entre meses. Las columnas faltantes en un archivo quedan NULL.
+      CREATE TABLE IF NOT EXISTS RAW.YELLOW_TRIPDATA (
+        VENDORID               NUMBER,
+        TPEP_PICKUP_DATETIME   TIMESTAMP_NTZ,
+        TPEP_DROPOFF_DATETIME  TIMESTAMP_NTZ,
+        PASSENGER_COUNT        FLOAT,
+        TRIP_DISTANCE          FLOAT,
+        RATECODEID             FLOAT,
+        STORE_AND_FWD_FLAG     VARCHAR,
+        PULOCATIONID           NUMBER,
+        DOLOCATIONID           NUMBER,
+        PAYMENT_TYPE           NUMBER,
+        FARE_AMOUNT            FLOAT,
+        EXTRA                  FLOAT,
+        MTA_TAX                FLOAT,
+        TIP_AMOUNT             FLOAT,
+        TOLLS_AMOUNT           FLOAT,
+        IMPROVEMENT_SURCHARGE  FLOAT,
+        TOTAL_AMOUNT           FLOAT,
+        CONGESTION_SURCHARGE   FLOAT,
+        AIRPORT_FEE            FLOAT,
+        CBD_CONGESTION_FEE     FLOAT,
+        REQUEST_SOURCE         VARCHAR,
+        _SOURCE_FILE           VARCHAR       COMMENT 'Ruta del archivo en el stage (METADATA$FILENAME)',
+        _LOADED_AT             TIMESTAMP_LTZ COMMENT 'Momento de la carga (METADATA$START_SCAN_TIME)'
+      )
+      COMMENT = 'NYC Yellow Taxi tal cual llega de TLC + metadata de carga';
+
+pluginDefaults:
+  - type: io.kestra.plugin.jdbc.snowflake
+    values:
+      url: "jdbc:snowflake://{{ envs.snowflake_account }}.snowflakecomputing.com/?JDBC_QUERY_RESULT_FORMAT=JSON"
+      username: "{{ envs.snowflake_user }}"
+      # .env guarda el PEM en base64 (una línea); aquí se decodifica a PEM
+      privateKey: "{{ envs.snowflake_private_key | base64decode }}"
+      role: "{{ envs.snowflake_role }}"
+      warehouse: "{{ envs.snowflake_warehouse }}"
+      database: "{{ envs.snowflake_database }}"
+      schema: RAW

@@ -1,0 +1,37 @@
+name: nyc_taxi
+version: "1.0.0"
+config-version: 2
+profile: nyc_taxi
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+analysis-paths: ["analyses"]
+
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  # Rango de la dimensión fecha (cubre ene-2025 a ago-2026 + margen para dropoffs y meses futuros)
+  dim_date_start: "2025-01-01"
+  dim_date_end: "2027-12-31"
+  # Umbrales de validez (justificados en README.md)
+  max_trip_duration_minutes: 1440   # 24 h
+  max_trip_distance_miles: 500
+
+seeds:
+  nyc_taxi:
+    +schema: bronze
+    +quote_columns: false
+
+models:
+  nyc_taxi:
+    bronze:
+      +schema: bronze
+      +materialized: view
+    silver:
+      +schema: silver
+      +materialized: table
+    gold:
+      +schema: gold
+      +materialized: table

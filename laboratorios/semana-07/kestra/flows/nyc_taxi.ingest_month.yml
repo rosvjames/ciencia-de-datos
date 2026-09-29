@@ -1,0 +1,80 @@
+id: ingest_month
+namespace: nyc_taxi
+description: |
+  Ingesta de un mes de NYC Yellow Taxi:
+  descarga el Parquet desde TLC -> PUT al stage interno -> DELETE + COPY INTO RAW.
+  Idempotente: re-ejecutar el mismo período reemplaza sus filas, no las duplica.
+
+inputs:
+  - id: period
+    type: STRING
+    description: Período a cargar en formato YYYY-MM
+    defaults: "2025-01"
+    validator: "^20[0-9]{2}-(0[1-9]|1[0-2])$"
+
+variables:
+  file_name: "yellow_tripdata_{{ inputs.period }}.parquet"
+  source_url: "https://d37ci6vzurychx.cloudfront.net/trip-data/{{ render(vars.file_name) }}"
+  stage_path: "yellow/{{ render(vars.file_name) }}"
+
+tasks:
+  - id: init_raw
+    type: io.kestra.plugin.core.flow.Subflow
+    namespace: nyc_taxi
+    flowId: init_raw
+    wait: true
+    transmitFailed: true
+
+  - id: download
+    type: io.kestra.plugin.core.http.Download
+    description: Descarga el Parquet al storage interno de Kestra (falla con 403 si TLC aún no lo publica)
+    uri: "{{ render(vars.source_url) }}"
+
+  - id: upload_to_stage
+    type: io.kestra.plugin.jdbc.snowflake.Upload
+    description: PUT del archivo al stage interno (sobrescribe si ya existe)
+    from: "{{ outputs.download.uri }}"
+    stageName: "@{{ envs.snowflake_database }}.RAW.TLC_STAGE"
+    prefix: yellow
+    fileName: "{{ render(vars.file_name) }}"
+    compress: false
+
+  - id: load_raw
+    type: io.kestra.plugin.jdbc.snowflake.Queries
+    description: Reemplaza atómicamente las filas del archivo en RAW.YELLOW_TRIPDATA
+    transaction: true
+    sql: |
+      DELETE FROM RAW.YELLOW_TRIPDATA
+      WHERE _SOURCE_FILE = '{{ render(vars.stage_path) }}';
+
+      COPY INTO RAW.YELLOW_TRIPDATA
+        FROM @RAW.TLC_STAGE/{{ render(vars.stage_path) }}
+        FILE_FORMAT = (FORMAT_NAME = 'RAW.PARQUET_FF')
+        MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
+        INCLUDE_METADATA = (_SOURCE_FILE = METADATA$FILENAME, _LOADED_AT = METADATA$START_SCAN_TIME)
+        FORCE = TRUE
+        ON_ERROR = ABORT_STATEMENT;
+
+  - id: row_count
+    type: io.kestra.plugin.jdbc.snowflake.Query
+    sql: |
+      SELECT COUNT(*) AS ROWS_LOADED
+      FROM RAW.YELLOW_TRIPDATA
+      WHERE _SOURCE_FILE = '{{ render(vars.stage_path) }}'
+    fetchType: FETCH_ONE
+
+  - id: log_result
+    type: io.kestra.plugin.core.log.Log
+    message: "{{ inputs.period }}: {{ outputs.row_count.row.ROWS_LOADED }} filas en RAW.YELLOW_TRIPDATA"
+
+pluginDefaults:
+  - type: io.kestra.plugin.jdbc.snowflake
+    values:
+      url: "jdbc:snowflake://{{ envs.snowflake_account }}.snowflakecomputing.com/?JDBC_QUERY_RESULT_FORMAT=JSON"
+      username: "{{ envs.snowflake_user }}"
+      # .env guarda el PEM en base64 (una línea); aquí se decodifica a PEM
+      privateKey: "{{ envs.snowflake_private_key | base64decode }}"
+      role: "{{ envs.snowflake_role }}"
+      warehouse: "{{ envs.snowflake_warehouse }}"
+      database: "{{ envs.snowflake_database }}"
+      schema: RAW

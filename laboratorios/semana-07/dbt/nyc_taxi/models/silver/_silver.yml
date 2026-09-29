@@ -1,0 +1,107 @@
+version: 2
+
+models:
+  - name: slv_yellow_trips_staged
+    description: >
+      Todos los registros de Bronze tipados, estandarizados y conformados, con
+      rejection_reason (NULL = válido). Incremental delete+insert por _source_period.
+    columns:
+      - name: trip_id
+        description: Hash (surrogate key) de todos los atributos de negocio del viaje.
+        data_tests: [not_null]
+      - name: _source_period
+        data_tests: [not_null]
+      - name: rejection_reason
+        description: Motivo de descarte; NULL si el registro es válido.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - missing_timestamp
+                  - pickup_outside_file_period
+                  - non_positive_duration
+                  - duration_over_limit
+                  - invalid_distance
+                  - distance_over_limit
+                  - non_positive_total_amount
+                  - negative_fare_amount
+                  - unknown_location
+                  - duplicate
+
+  - name: slv_yellow_trips
+    description: Viajes válidos, limpios y deduplicados. Un registro por trip_id.
+    data_tests:
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "dropoff_datetime > pickup_datetime"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "total_amount > 0 and fare_amount >= 0 and trip_distance >= 0"
+    columns:
+      - name: trip_id
+        data_tests: [unique, not_null]
+      - name: pickup_datetime
+        data_tests: [not_null]
+      - name: dropoff_datetime
+        data_tests: [not_null]
+      - name: trip_duration_minutes
+        data_tests: [not_null]
+      - name: passenger_count
+        description: NULL cuando la fuente no lo informa o reporta 0 (no se imputa).
+      - name: vendor_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('vendors')
+                field: vendor_id
+      - name: rate_code_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('rate_codes')
+                field: rate_code_id
+      - name: payment_type_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('payment_types')
+                field: payment_type_id
+      - name: pickup_location_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('slv_taxi_zones')
+                field: location_id
+      - name: dropoff_location_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('slv_taxi_zones')
+                field: location_id
+      - name: total_amount
+        data_tests: [not_null]
+      - name: _source_file
+        data_tests: [not_null]
+      - name: _loaded_at
+        data_tests: [not_null]
+
+  - name: slv_yellow_trips_rejected
+    description: Registros descartados con su rejection_reason (auditoría de calidad).
+    columns:
+      - name: rejection_reason
+        data_tests: [not_null]
+
+  - name: slv_taxi_zones
+    description: Zonas TLC con nombres estandarizados ('N/A' -> 'Unknown').
+    columns:
+      - name: location_id
+        data_tests: [unique, not_null]
+      - name: borough
+        data_tests: [not_null]
+      - name: zone
+        data_tests: [not_null]
