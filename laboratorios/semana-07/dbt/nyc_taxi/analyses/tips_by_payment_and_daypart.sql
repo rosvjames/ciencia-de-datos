@@ -7,5 +7,6 @@ select
 from {{ ref('fct_trips') }} as f
 join {{ ref('dim_payment_type') }} as p on f.payment_type_key = p.payment_type_key
 join {{ ref('dim_time') }}         as t on f.pickup_time_key = t.time_key
+where f.is_fare_reliable
 group by 1, 2
 order by 1, 2

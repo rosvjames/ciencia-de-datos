@@ -106,6 +106,11 @@ conformed as (
         coalesce(i.airport_fee_amount, 0)                       as airport_fee_amount,
         coalesce(i.cbd_congestion_fee_amount, 0)                as cbd_congestion_fee_amount,
         i.total_amount,
+        -- Monto confiable: tarifa no negativa. Los viajes Flex Fare del vendor 2 en 2025
+        -- traen fare_amount negativo con total positivo: el viaje es real (distancia,
+        -- duración y zonas válidas) pero el desglose de montos no lo es. Se conserva el
+        -- viaje y se marca, para excluirlo solo de los análisis de ingreso.
+        coalesce(i.fare_amount >= 0, false)                     as is_fare_reliable,
         i.request_source,
         round(datediff('second', i.pickup_datetime, i.dropoff_datetime) / 60, 2)
                                                                 as trip_duration_minutes,
@@ -143,8 +148,8 @@ validated as (
                 then 'distance_over_limit'
             when total_amount is null or total_amount <= 0
                 then 'non_positive_total_amount'
-            when fare_amount is null or fare_amount < 0
-                then 'negative_fare_amount'
+            when fare_amount is null
+                then 'missing_fare_amount'
             when not is_known_pickup_location or not is_known_dropoff_location
                 then 'unknown_location'
             when row_number() over (

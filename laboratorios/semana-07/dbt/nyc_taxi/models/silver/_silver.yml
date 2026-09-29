@@ -24,7 +24,7 @@ models:
                   - invalid_distance
                   - distance_over_limit
                   - non_positive_total_amount
-                  - negative_fare_amount
+                  - missing_fare_amount
                   - unknown_location
                   - duplicate
 
@@ -36,7 +36,10 @@ models:
             expression: "dropoff_datetime > pickup_datetime"
       - dbt_utils.expression_is_true:
           arguments:
-            expression: "total_amount > 0 and fare_amount >= 0 and trip_distance >= 0"
+            expression: "total_amount > 0 and trip_distance >= 0 and (fare_amount >= 0 or not is_fare_reliable)"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "is_fare_reliable = (fare_amount >= 0)"
     columns:
       - name: trip_id
         data_tests: [unique, not_null]
@@ -84,6 +87,11 @@ models:
                 to: ref('slv_taxi_zones')
                 field: location_id
       - name: total_amount
+        data_tests: [not_null]
+      - name: is_fare_reliable
+        description: >
+          FALSE cuando fare_amount < 0 con total_amount > 0 (Flex Fare del vendor 2 en 2025).
+          El viaje es válido, pero sus montos no deben usarse en análisis de ingreso.
         data_tests: [not_null]
       - name: _source_file
         data_tests: [not_null]

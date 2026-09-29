@@ -56,4 +56,4 @@ flowchart LR
 | 5 | `dbt_build` → Bronze | Vistas sobre RAW con metadata de linaje (`_source_file`, `_source_period`, `_loaded_at`) | Vistas |
 | 6 | `dbt_build` → Silver | Tipado, estandarización, nulos, códigos, deduplicación, reglas de invalidez | Incremental `delete+insert` por período |
 | 7 | `dbt_build` → Gold | Esquema estrella (`fct_trips` + 6 dimensiones) | Tablas / incremental `delete+insert` por período |
-| 8 | `dbt_build` → Tests | 88 tests (not_null, unique, relationships, accepted_values, expression_is_true, reconciliaciones) | — |
+| 8 | `dbt_build` → Tests | 91 tests (not_null, unique, relationships, accepted_values, expression_is_true, reconciliaciones) | — |

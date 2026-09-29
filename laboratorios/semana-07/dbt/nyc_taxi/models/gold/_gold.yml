@@ -91,6 +91,9 @@ models:
       - name: total_amount
         description: Monto total cobrado al pasajero (USD, sin incluir propinas en efectivo).
         data_tests: [not_null]
+      - name: is_fare_reliable
+        description: FALSE si el desglose de montos no es confiable; excluir de análisis de ingreso.
+        data_tests: [not_null]
       - name: _source_period
         data_tests: [not_null]
 

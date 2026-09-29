@@ -99,7 +99,7 @@ curl -u "$KESTRA_USER:$KESTRA_PASSWORD" -X POST \
 
 El pipeline hace lo siguiente:
 1. **`backfill`**: descarga cada mes y lo carga en `RAW.YELLOW_TRIPDATA` (4 meses en paralelo).
-2. **`dbt_build`**: corre `dbt build`, que carga los seeds, materializa BRONZE, SILVER y GOLD y ejecuta los 88 tests.
+2. **`dbt_build`**: corre `dbt build`, que carga los seeds, materializa BRONZE, SILVER y GOLD y ejecuta los 91 tests.
 
 Otros usos:
 - Recargar un solo mes: ejecutar `nyc_taxi.ingest_month` con `period = 2025-03`.
@@ -160,7 +160,8 @@ Las decisiones se basan en un perfilamiento de enero 2025 y julio 2026 (unos 3,5
 | **Inválidos: período** | Pickups fuera del mes del archivo (p. ej. fechas de 2008/2009, o del mes anterior) | Rechazo `pickup_outside_file_period` | Evita cruces entre archivos y duplicados entre meses; son errores del taxímetro |
 | **Inválidos: duración** | `dropoff <= pickup` (de 2 k a 42 k filas por mes) o viajes de más de 24 h | Rechazo `non_positive_duration` / `duration_over_limit` | Físicamente imposibles o taxímetro que no se cerró |
 | **Inválidos: distancia** | Distancia negativa o de más de 500 mi | Rechazo `invalid_distance` / `distance_over_limit` | Fuera del rango operativo de un taxi de NYC. **Distancia 0 se conserva** (unos 2,6–3,6 % de las filas, con cobro real: tarifas negociadas o fallas del GPS) |
-| **Inválidos: montos** | `total_amount <= 0` (unos 1,8 % en ene-2025: anulaciones y reversos) y `fare_amount < 0` | Rechazo `non_positive_total_amount` / `negative_fare_amount` | Son contra-asientos contables, no viajes. Se conservan en `rejected` para auditoría |
+| **Inválidos: montos** | `total_amount <= 0` (unos 1,8 % en ene-2025: anulaciones y reversos) o `fare_amount` nulo | Rechazo `non_positive_total_amount` / `missing_fare_amount` | Son contra-asientos contables, no viajes. Se conservan en `rejected` para auditoría |
+| **Exactitud: tarifa negativa** | 1,88 M de viajes Flex Fare (`payment_type = 0`) del vendor 2, ene–nov 2025, con `fare_amount` ≈ −4,00 y `total_amount` ≈ +4,30, pero con distancia (3,3 mi) y duración (18 min) reales. Desde dic-2025 casi desaparecen | **Se conservan** como viajes válidos con `is_fare_reliable = FALSE` | Son viajes reales con un atributo mal registrado: excluirlos crearía un falso crecimiento de 2026 vs 2025 y subestimaría al vendor 2 y a Flex Fare. Se distingue *validez* (el registro existe) de *exactitud* (el monto es correcto): los análisis de volumen los cuentan y los de ingreso filtran `WHERE is_fare_reliable` |
 | **Inválidos: zonas** | LocationID fuera del catálogo TLC | Rechazo `unknown_location` | Sin zona no hay análisis geográfico. Las zonas 264/265 (*Unknown* / *Outside of NYC*) sí son válidas |
 
 Los umbrales (24 h, 500 mi) son variables en `dbt_project.yml`.
@@ -171,7 +172,7 @@ Para ver cuántas filas se rechazan por motivo: `dbt compile -s rejection_summar
 
 Ver [`docs/esquema_estrella.md`](docs/esquema_estrella.md).
 
-- **Tabla de hechos `fct_trips`.** Grano: **un viaje válido**. Métricas: pasajeros, distancia, duración, velocidad promedio, cada componente de la tarifa y el total.
+- **Tabla de hechos `fct_trips`.** Grano: **un viaje válido**. Métricas: pasajeros, distancia, duración, velocidad promedio, cada componente de la tarifa y el total. La marca `is_fare_reliable` indica si los montos se pueden usar en análisis de ingreso.
 - **Dimensiones:**
 
   | Dimensión | PK | Contenido |
@@ -187,7 +188,7 @@ Ver [`docs/esquema_estrella.md`](docs/esquema_estrella.md).
 
 ## Validación (tests dbt)
 
-`dbt build` ejecuta **88 tests**:
+`dbt build` ejecuta **91 tests**:
 
 - `not_null` en PKs, FKs, métricas clave y metadata de Bronze/RAW.
 - `unique` en todas las PKs de las dimensiones, en `trip_id` (Silver y Gold) y en los seeds.
@@ -195,7 +196,7 @@ Ver [`docs/esquema_estrella.md`](docs/esquema_estrella.md).
   - cada FK de `fct_trips` → su dimensión;
   - los códigos de Silver → sus catálogos.
 - `accepted_values` en `rejection_reason`.
-- `dbt_utils.expression_is_true`: duración > 0, total > 0, dropoff ≥ pickup, montos no negativos.
+- `dbt_utils.expression_is_true`: duración > 0, total > 0, dropoff ≥ pickup, tarifa ≥ 0 salvo en viajes marcados, y `is_fare_reliable` coherente con el signo de la tarifa.
 - Tests singulares:
   - `assert_raw_rows_accounted_in_silver`: no se pierden filas entre Bronze y Silver.
   - `assert_fct_trips_reconciles_with_silver`: Silver y Gold tienen el mismo conteo y el mismo ingreso por período.
@@ -223,8 +224,8 @@ SELECT _source_file, COUNT(*), MAX(_loaded_at) FROM RAW.YELLOW_TRIPDATA GROUP BY
 SELECT _source_period, COUNT_IF(rejection_reason IS NULL) AS valid, COUNT_IF(rejection_reason IS NOT NULL) AS rejected
 FROM SILVER.SLV_YELLOW_TRIPS_STAGED GROUP BY 1 ORDER BY 1;
 
--- Análisis: viajes e ingreso por borough de origen y mes
-SELECT d.year_month, l.borough, COUNT(*) AS trips, SUM(f.total_amount) AS revenue
+-- Análisis: viajes (todos) e ingreso (solo montos confiables) por borough de origen y mes
+SELECT d.year_month, l.borough, COUNT(*) AS trips, SUM(IFF(f.is_fare_reliable, f.total_amount, NULL)) AS revenue
 FROM GOLD.FCT_TRIPS f
 JOIN GOLD.DIM_DATE d     ON f.pickup_date_key = d.date_key
 JOIN GOLD.DIM_LOCATION l ON f.pickup_location_key = l.location_key

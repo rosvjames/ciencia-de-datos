@@ -26,6 +26,7 @@ erDiagram
         timestamp dropoff_datetime "degenerado"
         boolean is_store_and_forward "degenerado"
         varchar request_source "degenerado"
+        boolean is_fare_reliable "calidad: monto confiable"
         int passenger_count "métrica"
         number trip_distance "métrica (mi)"
         number trip_duration_minutes "métrica"
@@ -105,4 +106,5 @@ erDiagram
 | Miembros "Unknown" | `vendor_key = 99`, `rate_code_key = 99` y `payment_type_key = 5` absorben nulos y códigos fuera de catálogo; así toda FK es `not_null` y cumple `relationships`. |
 | `dim_time` a nivel minuto | 1.440 filas; permite analizar por hora, franja del día u hora pico sin tocar el hecho. |
 | Atributos degenerados | Timestamps exactos, `is_store_and_forward` y `request_source` se quedan en el hecho porque no tienen atributos descriptivos propios. |
+| Marca de calidad | `is_fare_reliable` = FALSE en viajes reales cuyo desglose de montos no es confiable (Flex Fare del vendor 2 en 2025). Los análisis de ingreso filtran por ella; los de volumen no. |
 | Métricas aditivas | Montos, distancia, duración y pasajeros son sumables; `avg_speed_mph` es no aditiva (se promedia). |

@@ -52,7 +52,7 @@ tasks:
 pluginDefaults:
   - type: io.kestra.plugin.jdbc.snowflake
     values:
-      url: "jdbc:snowflake://{{ envs.snowflake_account }}.snowflakecomputing.com/?JDBC_QUERY_RESULT_FORMAT=JSON"
+      url: "jdbc:snowflake://{{ envs.snowflake_account }}.snowflakecomputing.com/?JDBC_QUERY_RESULT_FORMAT=JSON&MULTI_STATEMENT_COUNT=0"
       username: "{{ envs.snowflake_user }}"
       # .env guarda el PEM en base64 (una línea); aquí se decodifica a PEM
       privateKey: "{{ envs.snowflake_private_key | base64decode }}"

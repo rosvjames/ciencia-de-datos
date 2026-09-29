@@ -42,6 +42,7 @@ select
     dropoff_datetime,
     is_store_and_forward,
     request_source,
+    is_fare_reliable,          -- filtrar en análisis de ingreso
 
     -- métricas
     passenger_count,
